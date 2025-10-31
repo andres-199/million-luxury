@@ -5,10 +5,7 @@ namespace MillionLuxury.Application.Interfaces;
 
 public interface IPropertyRepository
 {
-	Task<IEnumerable<Property>> GetAllAsync();
+	Task<IEnumerable<Property>> GetByFilterAsync(string? name, string? address, decimal? minPrice, decimal? maxPrice);
 	Task<Property> GetByIdAsync(ObjectId id);
-	Task<IEnumerable<Property>> GetByOwnerIdAsync(ObjectId ownerId);
 	Task<Property> CreateAsync(Property property);
-	Task<Property> UpdateAsync(Property property);
-	Task DeleteAsync(ObjectId id);
 }

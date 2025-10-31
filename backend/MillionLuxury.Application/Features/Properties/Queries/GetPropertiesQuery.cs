@@ -4,7 +4,13 @@ using MillionLuxury.Domain.Entities;
 
 namespace MillionLuxury.Application.Features.Properties.Queries;
 
-public record GetPropertiesQuery : IRequest<IEnumerable<Property>>;
+public record GetPropertiesQuery : IRequest<IEnumerable<Property>>
+{
+	public string? Name { get; init; }
+	public string? Address { get; init; }
+	public decimal? MinPrice { get; init; }
+	public decimal? MaxPrice { get; init; }
+}
 
 public class GetPropertiesQueryHandler : IRequestHandler<GetPropertiesQuery, IEnumerable<Property>>
 {
@@ -17,6 +23,6 @@ public class GetPropertiesQueryHandler : IRequestHandler<GetPropertiesQuery, IEn
 
 	public async Task<IEnumerable<Property>> Handle(GetPropertiesQuery request, CancellationToken cancellationToken)
 	{
-		return await _propertyRepository.GetAllAsync();
+		return await _propertyRepository.GetByFilterAsync(request.Name, request.Address, request.MinPrice, request.MaxPrice);
 	}
 }

@@ -4,27 +4,98 @@ using MillionLuxury.Application.Interfaces;
 using MillionLuxury.Domain.Entities;
 using MillionLuxury.Application.Common.Exceptions;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 
 namespace MillionLuxury.Infrastructure.Persistence;
 
 public class MongoDBPropertyRepository : IPropertyRepository
 {
 	private readonly IMongoCollection<Property> _properties;
+	private readonly ILogger<MongoDBPropertyRepository> _logger;
 
-	public MongoDBPropertyRepository(IMongoDbSettings settings)
+	public MongoDBPropertyRepository(IMongoDbSettings settings, ILogger<MongoDBPropertyRepository> logger)
 	{
+		_logger = logger;
 		var client = new MongoClient(settings.ConnectionString);
 		var database = client.GetDatabase(settings.DatabaseName);
 		_properties = database.GetCollection<Property>("Properties");
+
+
+		try
+		{
+			var textIndex = new CreateIndexModel<Property>(Builders<Property>.IndexKeys.Text(p => p.Name).Text(p => p.Address));
+			var priceIndex = new CreateIndexModel<Property>(Builders<Property>.IndexKeys.Ascending(p => p.Price));
+			_properties.Indexes.CreateMany(new[] { textIndex, priceIndex });
+			_logger.LogInformation("MongoDB indexes created successfully for Properties collection");
+		}
+		catch (Exception ex)
+		{
+			_logger.LogWarning(ex, "Failed to create MongoDB indexes for Properties collection. Indexes may already exist or there may be a configuration issue.");
+		}
 	}
 
-	public async Task<IEnumerable<Property>> GetAllAsync()
+	public async Task<Property> GetByIdAsync(ObjectId id)
 	{
-		var properties = await _properties.Find(_ => true).ToListAsync();
+		var property = await _properties.Find(p => p.Id == id).FirstOrDefaultAsync();
+		if (property == null)
+		{
+			throw new ApiException("Property not found", StatusCodes.Status404NotFound);
+		}
+
+		var propertyWithDetails = property;
+
+		var images = await _properties.Database
+			.GetCollection<PropertyImage>("PropertyImages")
+			.Find(i => i.PropertyId == id)
+			.ToListAsync();
+		propertyWithDetails.Images = images;
+
+		var traces = await _properties.Database
+			.GetCollection<PropertyTrace>("PropertyTraces")
+			.Find(t => t.PropertyId == id)
+			.ToListAsync();
+		propertyWithDetails.Traces = traces;
+
+		var owner = await _properties.Database
+			.GetCollection<Owner>("Owners")
+			.Find(o => o.Id == property.OwnerId)
+			.FirstOrDefaultAsync();
+		propertyWithDetails.Owner = owner;
+
+		return propertyWithDetails;
+	}
+
+	public async Task<IEnumerable<Property>> GetByFilterAsync(string? name, string? address, decimal? minPrice, decimal? maxPrice)
+	{
+		var filterBuilder = Builders<Property>.Filter;
+		var filters = new List<FilterDefinition<Property>>();
+
+		if (!string.IsNullOrWhiteSpace(name))
+		{
+			filters.Add(filterBuilder.Text(name));
+		}
+
+		if (!string.IsNullOrWhiteSpace(address))
+		{
+			filters.Add(filterBuilder.Regex(p => p.Address, new BsonRegularExpression(address, "i")));
+		}
+
+		if (minPrice.HasValue)
+		{
+			filters.Add(filterBuilder.Gte(p => p.Price, minPrice.Value));
+		}
+
+		if (maxPrice.HasValue)
+		{
+			filters.Add(filterBuilder.Lte(p => p.Price, maxPrice.Value));
+		}
+
+		var finalFilter = filters.Count > 0 ? filterBuilder.And(filters) : filterBuilder.Empty;
+
+		var properties = await _properties.Find(finalFilter).ToListAsync();
 
 		foreach (var property in properties)
 		{
-
 			property.Owner = await _properties.Database
 				.GetCollection<Owner>("Owners")
 				.Find(o => o.Id == property.OwnerId)
@@ -46,46 +117,6 @@ public class MongoDBPropertyRepository : IPropertyRepository
 		return properties;
 	}
 
-	public async Task<Property> GetByIdAsync(ObjectId id)
-	{
-		var property = await _properties.Find(p => p.Id == id).FirstOrDefaultAsync();
-		if (property == null)
-		{
-			throw new ApiException("Property not found", StatusCodes.Status404NotFound);
-		}
-
-		// Load related images and traces
-		var propertyWithDetails = property;
-
-		// Load images if they exist
-		var images = await _properties.Database
-			.GetCollection<PropertyImage>("PropertyImages")
-			.Find(i => i.PropertyId == id)
-			.ToListAsync();
-		propertyWithDetails.Images = images;
-
-		// Load traces if they exist
-		var traces = await _properties.Database
-			.GetCollection<PropertyTrace>("PropertyTraces")
-			.Find(t => t.PropertyId == id)
-			.ToListAsync();
-		propertyWithDetails.Traces = traces;
-
-		// Load owner if exists
-		var owner = await _properties.Database
-			.GetCollection<Owner>("Owners")
-			.Find(o => o.Id == property.OwnerId)
-			.FirstOrDefaultAsync();
-		propertyWithDetails.Owner = owner;
-
-		return propertyWithDetails;
-	}
-
-	public async Task<IEnumerable<Property>> GetByOwnerIdAsync(ObjectId ownerId)
-	{
-		return await _properties.Find(p => p.OwnerId == ownerId).ToListAsync();
-	}
-
 	public async Task<Property> CreateAsync(Property property)
 	{
 		property.CreatedAt = DateTime.UtcNow;
@@ -96,7 +127,6 @@ public class MongoDBPropertyRepository : IPropertyRepository
 
 		try
 		{
-			// Verify owner exists
 			var ownerExists = await _properties.Database
 				.GetCollection<Owner>("Owners")
 				.Find(o => o.Id == property.OwnerId)
@@ -113,53 +143,6 @@ public class MongoDBPropertyRepository : IPropertyRepository
 		catch (MongoWriteException ex) when (ex.WriteError.Category == ServerErrorCategory.DuplicateKey)
 		{
 			throw new ApiException("A property with this ID already exists", StatusCodes.Status409Conflict);
-		}
-	}
-
-	public async Task<Property> UpdateAsync(Property property)
-	{
-		if (property.Id == ObjectId.Empty)
-		{
-			throw new ApiException("Invalid property ID", StatusCodes.Status400BadRequest);
-		}
-
-		// Verify owner exists
-		var ownerExists = await _properties.Database
-			.GetCollection<Owner>("Owners")
-			.Find(o => o.Id == property.OwnerId)
-			.AnyAsync();
-
-		if (!ownerExists)
-		{
-			throw new ApiException("Owner not found", StatusCodes.Status404NotFound);
-		}
-
-		property.UpdatedAt = DateTime.UtcNow;
-		var result = await _properties.ReplaceOneAsync(p => p.Id == property.Id, property);
-
-		if (result.MatchedCount == 0)
-		{
-			throw new ApiException("Property not found", StatusCodes.Status404NotFound);
-		}
-
-		return property;
-	}
-
-	public async Task DeleteAsync(ObjectId id)
-	{
-		// Delete associated images and traces first
-		await _properties.Database
-			.GetCollection<PropertyImage>("PropertyImages")
-			.DeleteManyAsync(i => i.PropertyId == id);
-
-		await _properties.Database
-			.GetCollection<PropertyTrace>("PropertyTraces")
-			.DeleteManyAsync(t => t.PropertyId == id);
-
-		var result = await _properties.DeleteOneAsync(p => p.Id == id);
-		if (result.DeletedCount == 0)
-		{
-			throw new ApiException("Property not found", StatusCodes.Status404NotFound);
 		}
 	}
 }

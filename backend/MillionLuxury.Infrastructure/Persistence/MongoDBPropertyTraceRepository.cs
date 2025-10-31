@@ -18,21 +18,6 @@ public class MongoDBPropertyTraceRepository : IPropertyTraceRepository
 		_traces = database.GetCollection<PropertyTrace>("PropertyTraces");
 	}
 
-	public async Task<IEnumerable<PropertyTrace>> GetByPropertyIdAsync(ObjectId propertyId)
-	{
-		return await _traces.Find(x => x.PropertyId == propertyId).ToListAsync();
-	}
-
-	public async Task<PropertyTrace?> GetByIdAsync(ObjectId id)
-	{
-		var trace = await _traces.Find(p => p.Id == id).FirstOrDefaultAsync();
-		if (trace == null)
-		{
-			throw new ApiException("Property trace not found", StatusCodes.Status404NotFound);
-		}
-		return trace;
-	}
-
 	public async Task<PropertyTrace> CreateAsync(PropertyTrace trace)
 	{
 		trace.CreatedAt = DateTime.UtcNow;

@@ -18,9 +18,17 @@ public class PropertiesController : ControllerBase
 	}
 
 	[HttpGet]
-	public async Task<IActionResult> GetAll()
+	public async Task<IActionResult> GetAll([FromQuery] string? name = null, [FromQuery] string? address = null, [FromQuery] decimal? minPrice = null, [FromQuery] decimal? maxPrice = null)
 	{
-		var properties = await _mediator.Send(new GetPropertiesQuery());
+		var query = new GetPropertiesQuery
+		{
+			Name = name,
+			Address = address,
+			MinPrice = minPrice,
+			MaxPrice = maxPrice
+		};
+
+		var properties = await _mediator.Send(query);
 		return Ok(properties);
 	}
 
