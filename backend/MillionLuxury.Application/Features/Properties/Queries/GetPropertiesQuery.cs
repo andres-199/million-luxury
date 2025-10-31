@@ -10,6 +10,8 @@ public record GetPropertiesQuery : IRequest<IEnumerable<Property>>
 	public string? Address { get; init; }
 	public decimal? MinPrice { get; init; }
 	public decimal? MaxPrice { get; init; }
+	public int Page { get; init; } = 1;
+	public int PageSize { get; init; } = 10;
 }
 
 public class GetPropertiesQueryHandler : IRequestHandler<GetPropertiesQuery, IEnumerable<Property>>
@@ -23,6 +25,12 @@ public class GetPropertiesQueryHandler : IRequestHandler<GetPropertiesQuery, IEn
 
 	public async Task<IEnumerable<Property>> Handle(GetPropertiesQuery request, CancellationToken cancellationToken)
 	{
-		return await _propertyRepository.GetByFilterAsync(request.Name, request.Address, request.MinPrice, request.MaxPrice);
+		return await _propertyRepository.GetByFilterAsync(
+			request.Name,
+			request.Address,
+			request.MinPrice,
+			request.MaxPrice,
+			request.Page,
+			request.PageSize);
 	}
 }

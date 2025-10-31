@@ -4,6 +4,7 @@ using MillionLuxury.Domain.Entities;
 using MillionLuxury.Application.Common.Exceptions;
 using Microsoft.AspNetCore.Http;
 using MongoDB.Bson;
+using MillionLuxury.Infrastructure.Common.Constants;
 
 namespace MillionLuxury.Infrastructure.Persistence;
 
@@ -15,7 +16,7 @@ public class MongoDBPropertyTraceRepository : IPropertyTraceRepository
 	{
 		var client = new MongoClient(settings.ConnectionString);
 		var database = client.GetDatabase(settings.DatabaseName);
-		_traces = database.GetCollection<PropertyTrace>("PropertyTraces");
+		_traces = database.GetCollection<PropertyTrace>(MongoCollections.PropertyTraces);
 	}
 
 	public async Task<PropertyTrace> CreateAsync(PropertyTrace trace)

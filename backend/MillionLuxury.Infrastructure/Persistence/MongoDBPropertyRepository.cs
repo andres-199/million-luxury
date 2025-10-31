@@ -5,6 +5,7 @@ using MillionLuxury.Domain.Entities;
 using MillionLuxury.Application.Common.Exceptions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using MillionLuxury.Infrastructure.Common.Constants;
 
 namespace MillionLuxury.Infrastructure.Persistence;
 
@@ -18,7 +19,7 @@ public class MongoDBPropertyRepository : IPropertyRepository
 		_logger = logger;
 		var client = new MongoClient(settings.ConnectionString);
 		var database = client.GetDatabase(settings.DatabaseName);
-		_properties = database.GetCollection<Property>("Properties");
+		_properties = database.GetCollection<Property>(MongoCollections.Properties);
 
 
 		try
@@ -36,36 +37,16 @@ public class MongoDBPropertyRepository : IPropertyRepository
 
 	public async Task<Property> GetByIdAsync(ObjectId id)
 	{
-		var property = await _properties.Find(p => p.Id == id).FirstOrDefaultAsync();
+		var property = await GetPropertyWithRelations(id);
 		if (property == null)
 		{
 			throw new ApiException("Property not found", StatusCodes.Status404NotFound);
 		}
 
-		var propertyWithDetails = property;
-
-		var images = await _properties.Database
-			.GetCollection<PropertyImage>("PropertyImages")
-			.Find(i => i.PropertyId == id)
-			.ToListAsync();
-		propertyWithDetails.Images = images;
-
-		var traces = await _properties.Database
-			.GetCollection<PropertyTrace>("PropertyTraces")
-			.Find(t => t.PropertyId == id)
-			.ToListAsync();
-		propertyWithDetails.Traces = traces;
-
-		var owner = await _properties.Database
-			.GetCollection<Owner>("Owners")
-			.Find(o => o.Id == property.OwnerId)
-			.FirstOrDefaultAsync();
-		propertyWithDetails.Owner = owner;
-
-		return propertyWithDetails;
+		return property;
 	}
 
-	public async Task<IEnumerable<Property>> GetByFilterAsync(string? name, string? address, decimal? minPrice, decimal? maxPrice)
+	public async Task<IEnumerable<Property>> GetByFilterAsync(string? name, string? address, decimal? minPrice, decimal? maxPrice, int page, int pageSize)
 	{
 		var filterBuilder = Builders<Property>.Filter;
 		var filters = new List<FilterDefinition<Property>>();
@@ -92,26 +73,36 @@ public class MongoDBPropertyRepository : IPropertyRepository
 
 		var finalFilter = filters.Count > 0 ? filterBuilder.And(filters) : filterBuilder.Empty;
 
-		var properties = await _properties.Find(finalFilter).ToListAsync();
+		var properties = await _properties.Find(finalFilter)
+			.Skip((page - 1) * pageSize)
+			.Limit(pageSize)
+			.ToListAsync();
+
+
+		var ownerIds = properties.Select(p => p.OwnerId).Distinct().ToList();
+		var propertyIds = properties.Select(p => p.Id).ToList();
+
+		var owners = await _properties.Database
+			.GetCollection<Owner>(MongoCollections.Owners)
+			.Find(o => ownerIds.Contains(o.Id))
+			.ToListAsync();
+
+		var images = await _properties.Database
+			.GetCollection<PropertyImage>(MongoCollections.PropertyImages)
+			.Find(i => propertyIds.Contains(i.PropertyId))
+			.ToListAsync();
+
+		var traces = await _properties.Database
+			.GetCollection<PropertyTrace>(MongoCollections.PropertyTraces)
+			.Find(t => propertyIds.Contains(t.PropertyId))
+			.ToListAsync();
+
 
 		foreach (var property in properties)
 		{
-			property.Owner = await _properties.Database
-				.GetCollection<Owner>("Owners")
-				.Find(o => o.Id == property.OwnerId)
-				.FirstOrDefaultAsync();
-
-
-			property.Images = await _properties.Database
-				.GetCollection<PropertyImage>("PropertyImages")
-				.Find(i => i.PropertyId == property.Id)
-				.ToListAsync();
-
-
-			property.Traces = await _properties.Database
-				.GetCollection<PropertyTrace>("PropertyTraces")
-				.Find(t => t.PropertyId == property.Id)
-				.ToListAsync();
+			property.Owner = owners.FirstOrDefault(o => o.Id == property.OwnerId);
+			property.Images = images.Where(i => i.PropertyId == property.Id).ToList();
+			property.Traces = traces.Where(t => t.PropertyId == property.Id).ToList();
 		}
 
 		return properties;
@@ -128,7 +119,7 @@ public class MongoDBPropertyRepository : IPropertyRepository
 		try
 		{
 			var ownerExists = await _properties.Database
-				.GetCollection<Owner>("Owners")
+				.GetCollection<Owner>(MongoCollections.Owners)
 				.Find(o => o.Id == property.OwnerId)
 				.AnyAsync();
 
@@ -138,12 +129,39 @@ public class MongoDBPropertyRepository : IPropertyRepository
 			}
 
 			await _properties.InsertOneAsync(property);
-			return property;
+			return await GetPropertyWithRelations(property.Id);
 		}
 		catch (MongoWriteException ex) when (ex.WriteError.Category == ServerErrorCategory.DuplicateKey)
 		{
 			throw new ApiException("A property with this ID already exists", StatusCodes.Status409Conflict);
 		}
+	}
+
+	private async Task<Property?> GetPropertyWithRelations(ObjectId id)
+	{
+		var property = await _properties.Find(p => p.Id == id).FirstOrDefaultAsync();
+
+		if (property == null)
+		{
+			return null;
+		}
+
+		property.Owner = await _properties.Database
+			.GetCollection<Owner>(MongoCollections.Owners)
+			.Find(o => o.Id == property.OwnerId)
+			.FirstOrDefaultAsync();
+
+		property.Images = await _properties.Database
+			.GetCollection<PropertyImage>(MongoCollections.PropertyImages)
+			.Find(i => i.PropertyId == property.Id)
+			.ToListAsync();
+
+		property.Traces = await _properties.Database
+			.GetCollection<PropertyTrace>(MongoCollections.PropertyTraces)
+			.Find(t => t.PropertyId == property.Id)
+			.ToListAsync();
+
+		return property;
 	}
 }
 

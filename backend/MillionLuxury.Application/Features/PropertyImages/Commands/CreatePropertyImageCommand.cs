@@ -12,7 +12,6 @@ public record CreatePropertyImageCommand : IRequest<PropertyImage>
 	public required string File { get; init; }
 	public bool Enabled { get; init; } = true;
 
-	// Internal property set by the controller
 	public string PropertyId { get; init; } = string.Empty;
 }
 
@@ -36,7 +35,6 @@ public class CreatePropertyImageCommandHandler : IRequestHandler<CreatePropertyI
 			throw new ApiException("Invalid property ID format", StatusCodes.Status400BadRequest);
 		}
 
-		// Verify property exists
 		await _propertyRepository.GetByIdAsync(propertyId);
 
 		var propertyImage = new PropertyImage
