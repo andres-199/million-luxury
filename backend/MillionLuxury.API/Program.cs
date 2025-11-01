@@ -3,6 +3,8 @@ using MillionLuxury.API.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddCorsConfiguration();
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -24,6 +26,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseMiddleware<ErrorHandlingMiddleware>();
+
+app.UseCors("AllowLocalhost");
 
 app.UseHttpsRedirection();
 app.UseAuthorization();
