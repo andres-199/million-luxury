@@ -26,8 +26,8 @@ export const PropertyImages = ({
           },
         }}
       >
-        {enabledImages.map((image) => (
-          <ImageListItem key={image.id}>
+        {enabledImages.map((image, i) => (
+          <ImageListItem key={image.id + i}>
             <img
               src={image.file}
               alt={propertyName}

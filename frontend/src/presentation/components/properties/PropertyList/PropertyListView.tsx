@@ -123,8 +123,8 @@ export const PropertyListView = ({
           },
         }}
       >
-        {properties.map((property) => (
-          <Box key={property.id} sx={{ width: "100%", minWidth: 0 }}>
+        {properties.map((property, i) => (
+          <Box key={property.id + i} sx={{ width: "100%", minWidth: 0 }}>
             <PropertyCard
               property={property}
               onClick={() => handlePropertyClick(property)}
