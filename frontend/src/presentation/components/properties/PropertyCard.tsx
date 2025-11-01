@@ -1,7 +1,8 @@
-import { Card, CardContent, CardMedia, Typography, Box } from "@mui/material";
+import { Card, CardContent, Typography, Box } from "@mui/material";
 import { LocationOn } from "@mui/icons-material";
 import type { Property } from "../../../domain/entities";
 import { formatCurrency } from "../../utils";
+import { ImageCarousel } from "../common/ImageCarousel";
 
 interface PropertyCardProps {
   property: Property;
@@ -9,10 +10,7 @@ interface PropertyCardProps {
 }
 
 export const PropertyCard = ({ property, onClick }: PropertyCardProps) => {
-  const enabledImage = property.images.find((img) => img.enabled);
-  const imageUrl =
-    enabledImage?.file ||
-    "https://www.jport.co/Editor/image/4721055615600659_empty.png";
+  const hasEnabledImages = property.images.some((img) => img.enabled);
 
   return (
     <Card
@@ -81,16 +79,11 @@ export const PropertyCard = ({ property, onClick }: PropertyCardProps) => {
       >
         {property.year}
       </Box>
-      <CardMedia
-        component="img"
-        height="400"
-        image={imageUrl}
-        alt={property.name}
-        sx={{
-          objectFit: "cover",
-          minHeight: 400,
-          maxHeight: 400,
-        }}
+      <ImageCarousel
+        images={property.images}
+        name={property.name}
+        height={300}
+        showControls={property.images.filter((img) => img.enabled).length > 1}
       />
       <CardContent sx={{ py: 2, px: 2.5 }}>
         <Box display="flex" justifyContent="space-between" gap={2}>

@@ -50,15 +50,21 @@ public class MongoDBPropertyRepository : IPropertyRepository
 	{
 		var filterBuilder = Builders<Property>.Filter;
 		var filters = new List<FilterDefinition<Property>>();
-
-		if (!string.IsNullOrWhiteSpace(name))
+		if (!string.IsNullOrWhiteSpace(name) || !string.IsNullOrWhiteSpace(address))
 		{
-			filters.Add(filterBuilder.Text(name));
-		}
+			var searchConditions = new List<FilterDefinition<Property>>();
 
-		if (!string.IsNullOrWhiteSpace(address))
-		{
-			filters.Add(filterBuilder.Regex(p => p.Address, new BsonRegularExpression(address, "i")));
+			if (!string.IsNullOrWhiteSpace(name))
+			{
+				searchConditions.Add(filterBuilder.Regex(p => p.Name, new BsonRegularExpression(name, "i")));
+			}
+
+			if (!string.IsNullOrWhiteSpace(address))
+			{
+				searchConditions.Add(filterBuilder.Regex(p => p.Address, new BsonRegularExpression(address, "i")));
+			}
+
+			filters.Add(filterBuilder.Or(searchConditions));
 		}
 
 		if (minPrice.HasValue)
