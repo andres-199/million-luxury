@@ -51,3 +51,7 @@ Million Luxury is a web application for luxury property management that enables:
 
 - Backend: .NET 9.0, MongoDB
 - Frontend: React 19, TypeScript, Material-UI
+
+
+[demo-million-luxury.webm](https://github.com/user-attachments/assets/658986dd-d836-49cd-9bfe-c506d3f54b4d)
+
